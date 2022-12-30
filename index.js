@@ -104,6 +104,12 @@ async function getArtistTopTracks(artist)
     var topTracks = (await spotifyApi.getArtistTopTracks(artist.id, "GB")).body;
     var topTracksStr = "У данного исполнителя треки отсутствуют";
 
+    if(topTracks.tracks.length === 0)
+    {
+        return topTracksStr;
+    }
+
+    topTracksStr = "";
     var count = 5;
 
     if(topTracks.tracks.length < 5)
@@ -141,7 +147,7 @@ bot.on('inline_query', async ctx => {
       break tryfindartist;
     }
 
-    findedArtists = (await spotifyApi.searchArtists(entered));
+    var findedArtists = (await spotifyApi.searchArtists(entered));
 
     if(findedArtists.body.artists.items.length == 0)
     {
@@ -275,7 +281,7 @@ bot.on('chosen_inline_result', async ctx => {
             var artistLink = getArtistSpotifyLink(artist);
             var artistImageLink = getImageURL(artist);
 
-            var topTracksStr = await getArtistTopTracks(artist);
+            var topTracksStr = (await getArtistTopTracks(artist));
 
             var genres = getGeneralGenres(artist, undefined);
 
@@ -297,7 +303,7 @@ bot.on('chosen_inline_result', async ctx => {
             var sendedArtist = (await spotifyApi.getArtist(sendedArtistID)).body;
             var artist = (await spotifyApi.getArtist(artistID)).body;
 
-            var topTracksStr = await getArtistTopTracks(artist);
+            var topTracksStr = (await getArtistTopTracks(artist));
             var generalGenres = getGeneralGenres(sendedArtist, artist);
 
             var sendedArtistLink = getArtistSpotifyLink(sendedArtist);
