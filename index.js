@@ -49,32 +49,76 @@ function getArtistSpotifyLink(artist)
 function getGeneralGenres(artist, currentArtist)
 {
     var enteredArtistGenres = artist.genres;
-    var currentArtistGenres = currentArtist.genres;
-    var generalGenresArray = [];
-
-    currentArtistGenres.forEach(element => {
-        if (enteredArtistGenres.includes(element)) {
-            generalGenresArray.push(element);
-        }
-    })
 
     var generalGenres = "Отсутствуют";
 
-    if (generalGenresArray.length !== 0) {
-        generalGenres = "";
+    if(currentArtist == undefined)
+    {
+        var generalGenres = "Отсутствуют";
 
-        for (let i = 0; i < generalGenresArray.length; i++) {
-            var end = ", ";
+        if (enteredArtistGenres.length !== 0) {
+            generalGenres = "";
 
-            if (i == generalGenresArray.length - 1) {
-                end = "";
+            for (let i = 0; i < enteredArtistGenres.length; i++) {
+                var end = ", ";
+
+                if (i == enteredArtistGenres.length - 1) {
+                    end = "";
+                }
+
+                generalGenres += enteredArtistGenres[i] + end;
             }
-
-            generalGenres += generalGenresArray[i] + end;
         }
     }
+    else {
 
+
+        var currentArtistGenres = currentArtist.genres;
+        var generalGenresArray = [];
+
+        currentArtistGenres.forEach(element => {
+            if (enteredArtistGenres.includes(element)) {
+                generalGenresArray.push(element);
+            }
+        })
+
+        if (generalGenresArray.length !== 0) {
+            generalGenres = "";
+
+            for (let i = 0; i < generalGenresArray.length; i++) {
+                var end = ", ";
+
+                if (i == generalGenresArray.length - 1) {
+                    end = "";
+                }
+
+                generalGenres += generalGenresArray[i] + end;
+            }
+        }
+    }
     return generalGenres;
+}
+
+async function getArtistTopTracks(artist)
+{
+    var topTracks = (await spotifyApi.getArtistTopTracks(artist.id, "GB")).body;
+    var topTracksStr = "У данного исполнителя треки отсутствуют";
+
+    var count = 5;
+
+    if(topTracks.tracks.length < 5)
+    {
+        count = topTracks.tracks.length;
+    }
+
+    for(var i = 0; i < count; i++)
+    {
+        var currentTrackLink = topTracks.tracks[i].external_urls.spotify;
+
+        topTracksStr += `<a href="${currentTrackLink}">${topTracks.tracks[i].name}</a>\n`;
+    }
+
+    return topTracksStr;
 }
 
 bot.on('inline_query', async ctx => {
@@ -88,7 +132,6 @@ bot.on('inline_query', async ctx => {
   tryfindartist: try {
     var entered = ctx.inlineQuery.query;
 
-    //https://open.spotify.com/artist/7B9Gg9epjQzfNGdxijFczG?si=6a60e02166194174
     if (entered.startsWith("https://open.spotify.com/artist/")) {
       var withoutDomen = entered.split("/");
 
@@ -133,7 +176,7 @@ bot.on('inline_query', async ctx => {
       var enteredArtistImageLink = getImageURL(artist);
 
       var enteredArtistKeyboard = [
-          [{text: "Открыть Telegram-канал разработчика", url: "https://t.me/tupadev"}]
+          [{text: "Открыть Telegram-канал разработчика", url: "https://t.me/tupalinks"}]
       ];
 
       results.push(
@@ -151,13 +194,30 @@ bot.on('inline_query', async ctx => {
               parse_mode:"HTML"
           });
 
+      if(artists.length === 0)
+      {
+          results.push({
+              type: 'article',
+              id: 'noRelatedArtists',
+              title: "Похожие исполнители не найдены",
+              description: `К сожалению, исполнителей, похожих на ${artist.name} не найдено.`,
+              input_message_content:{ message_text: `К сожалению, исполнителей, похожих на ${artist.name} не найдено.` },
+              reply_markup: {
+                  inline_keyboard: enteredArtistKeyboard
+              },
+          });
+
+          ctx.answerInlineQuery(results, {cache_time: 0, is_personal: true});
+          return;
+      }
+
       for (let i = 0; i < artists.length; i++) {
           var currentArtist = artists[i];
 
           var artistImageLink = getImageURL(currentArtist);
 
           var artistKeyboard = [
-              [{text: "Открыть Telegram-канал разработчика", url: "https://t.me/tupadev"}]
+              [{text: "Открыть Telegram-канал разработчика", url: "https://t.me/tupalinks"}]
           ];
 
           results.push({
@@ -215,23 +275,17 @@ bot.on('chosen_inline_result', async ctx => {
             var artistLink = getArtistSpotifyLink(artist);
             var artistImageLink = getImageURL(artist);
 
-            var topTracks = (await spotifyApi.getArtistTopTracks(artistID, "GB")).body;
+            var topTracksStr = await getArtistTopTracks(artist);
 
-            var topTracksStr = "";
+            var genres = getGeneralGenres(artist, undefined);
 
             artistKeyboard = [
                 [{text: "Открыть профиль исполнителя в Spotify", url: artistLink}],
-                [{text: "Открыть Telegram-канал разработчика", url: "https://t.me/tupadev"}]
+                [{text: "Открыть Telegram-канал разработчика", url: "https://t.me/tupalinks"}]
             ];
 
-            for(var i = 0; i < 5; i++)
-            {
-                var currentTrackLink = topTracks.tracks[i].external_urls.spotify;
-
-                topTracksStr += `<a href="${currentTrackLink}">${topTracks.tracks[i].name}</a>\n`;
-            }
-
             message = `Информация про ${artist.name}<a href="${artistImageLink}">🎵</a>:
+          \nЖанры: ${genres}
           \nПодписчики: ${artist.followers.total}
           \n\nТоп-5 треков: \n${topTracksStr}`;
 
@@ -243,9 +297,7 @@ bot.on('chosen_inline_result', async ctx => {
             var sendedArtist = (await spotifyApi.getArtist(sendedArtistID)).body;
             var artist = (await spotifyApi.getArtist(artistID)).body;
 
-            var topTracks = (await spotifyApi.getArtistTopTracks(artistID, "GB")).body;
-
-            var topTracksStr = "";
+            var topTracksStr = await getArtistTopTracks(artist);
             var generalGenres = getGeneralGenres(sendedArtist, artist);
 
             var sendedArtistLink = getArtistSpotifyLink(sendedArtist);
@@ -255,14 +307,8 @@ bot.on('chosen_inline_result', async ctx => {
 
             artistKeyboard = [
                 [{text: "Открыть профиль исполнителя в Spotify", url: artistLink}],
-                [{text: "Открыть Telegram-канал разработчика", url: "https://t.me/tupadev"}]
+                [{text: "Открыть Telegram-канал разработчика", url: "https://t.me/tupalinks"}]
             ];
-
-            for (var i = 0; i < 5; i++) {
-                var currentTrackLink = topTracks.tracks[i].external_urls.spotify;
-
-                topTracksStr += `<a href="${currentTrackLink}">${topTracks.tracks[i].name}</a>\n`;
-            }
 
             message = `Информация про ${artist.name}<a href="${artistImageLink}">🎵</a>:\n\nСовпадения с <a href="${sendedArtistLink}">${sendedArtist.name}</a> по жанрам: ${generalGenres}
           \nПодписчики: ${artist.followers.total}
@@ -278,6 +324,8 @@ bot.on('chosen_inline_result', async ctx => {
 bot.help(ctx => {
   bot.telegram.sendMessage(ctx.chat.id, "Я работаю в inline-режиме, это означает что меня можно использовать в любом чате. Просто упомяните меня и напишите интересующего вас исполнителя, и я найду похожих." +
       "\nПример: <code>@findrelatedartistsbot верка сердючка</code>" +
+      "\n\nТак же, если у вас не получается найти нужного исполнителя обычным поиском, то вы можете вставить ссылку на его профиль в Spotify" +
+      "\nПример: <code>@findrelatedartistsbot https://open.spotify.com/artist/7uH6CJjqK71HlHW4WHNAJg?si=hfRfvepvQL26MEsG97W1Lw</code>" +
       "\n\nЕсли у вас возникли какие то вопросы/проблемы, <a href='https://t.me/tupalinks'>свяжитесь с разработчиком</a>", {parse_mode: "HTML"});
 })
 
